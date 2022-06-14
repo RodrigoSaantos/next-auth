@@ -6,81 +6,88 @@ interface AxiosErrorResponse {
   code?: string;
 }
 
-let cookies = parseCookies();
 let isRefreshing = false;
 let failedRequestsQueue = [];
 
+export function setupAPIClient(ctx = undefined) {
+  let cookies = parseCookies(ctx);
 
-export const api = axios.create({
-  baseURL: 'http://localhost:3333',
-  headers: {
-    Authorization: `Bearer ${cookies['nextauth.token']}`
-  },
-});
+  const api = axios.create({
+    baseURL: 'http://localhost:3333',
+    headers: {
+      Authorization: `Bearer ${cookies['nextauth.token']}`
+    },
+  });
 
-api.interceptors.response.use(response => {
-  return response;
-}, (error: AxiosError<AxiosErrorResponse>) => {
-  if (error.response?.status === 401) {
-    if (error.response.data?.code === 'token.expired') {
-      // renovar o token
-      cookies = parseCookies();
+  api.interceptors.response.use(response => {
+    return response;
+  }, (error: AxiosError<AxiosErrorResponse>) => {
+    if (error.response?.status === 401) {
+      if (error.response.data?.code === 'token.expired') {
+        // renovar o token
+        cookies = parseCookies(ctx);
 
-      const { 'nextauth.refreshToken': refreshToken } = cookies;
+        const { 'nextauth.refreshToken': refreshToken } = cookies;
 
-      const originalConfig = error.config;
+        const originalConfig = error.config;
 
-      if (!isRefreshing) {
-        isRefreshing = true;
+        if (!isRefreshing) {
+          isRefreshing = true;
 
-        api.post('/refresh', {
-          refreshToken,
-        }).then(response => {
-          const { token } = response.data;
+          api.post('/refresh', {
+            refreshToken,
+          }).then(response => {
+            const { token } = response.data;
 
-          setCookie(undefined, 'nextauth.token', token, {
-            maxAge: 60 * 60 * 24 * 30, // 30 days
-            path: '/',
+            setCookie(ctx, 'nextauth.token', token, {
+              maxAge: 60 * 60 * 24 * 30, // 30 days
+              path: '/',
+            });
+
+            setCookie(ctx, 'nextauth.refreshToken', response.data.refreshToken, {
+              maxAge: 60 * 60 * 24 * 30, // 30 days
+              path: '/',
+            });
+
+            api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+
+            failedRequestsQueue.forEach(request => request.resolve(token));
+            failedRequestsQueue = [];
+
+          }).catch(err => {
+            failedRequestsQueue.forEach(request => request.reject(err));
+            failedRequestsQueue = [];
+            if (process.browser) {
+              signOut();
+            }
+          }).finally(() => {
+            isRefreshing = false;
           });
+        }
 
-          setCookie(undefined, 'nextauth.refreshToken', response.data.refreshToken, {
-            maxAge: 60 * 60 * 24 * 30, // 30 days
-            path: '/',
+        return new Promise((resolve, reject) => {
+
+          failedRequestsQueue.push({
+            resolve: (token: string) => {
+
+              originalConfig.headers["Authorization"] = `Bearer ${token}`
+
+              resolve(api(originalConfig))
+            },
+            reject: (err: AxiosError) => {
+              reject(err)
+            },
           });
-
-          api.defaults.headers.common['Authorization'] = `Bearer ${token}`
-
-          failedRequestsQueue.forEach(request => request.resolve(token));
-          failedRequestsQueue = [];
-
-        }).catch(err => {
-          failedRequestsQueue.forEach(request => request.reject(err));
-          failedRequestsQueue = [];
-        }).finally(() => {
-          isRefreshing = false;
         });
-
+      } else {
+        // deslogar o usuário
+        if (process.browser) {
+          signOut();
+        }
       }
-
-      return new Promise((resolve, reject) => {
-
-        failedRequestsQueue.push({
-          resolve: (token: string) => {
-
-            originalConfig.headers["Authorization"] = `Bearer ${token}`
-
-            resolve(api(originalConfig))
-          },
-          reject: (err: AxiosError) => {
-            reject(err)
-          },
-        });
-      });
-    } else {
-      // deslogar o usuário
-      signOut();
     }
-  }
 
-  return Promise.reject(error);
-})
+    return Promise.reject(error);
+  });
+  return api;
+}
