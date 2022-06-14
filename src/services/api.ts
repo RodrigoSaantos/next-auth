@@ -1,5 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import { parseCookies, setCookie } from 'nookies';
+import { signOut } from '../contexts/AuthContext';
 
 interface AxiosErrorResponse {
   code?: string;
@@ -8,6 +9,7 @@ interface AxiosErrorResponse {
 let cookies = parseCookies();
 let isRefreshing = false;
 let failedRequestsQueue = [];
+
 
 export const api = axios.create({
   baseURL: 'http://localhost:3333',
@@ -76,6 +78,9 @@ api.interceptors.response.use(response => {
       });
     } else {
       // deslogar o usuário
+      signOut();
     }
   }
+
+  return Promise.reject(error);
 })
