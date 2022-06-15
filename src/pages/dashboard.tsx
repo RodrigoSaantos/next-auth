@@ -3,6 +3,7 @@ import { AuthContext } from "../contexts/AuthContext"
 import { setupAPIClient } from "../services/api";
 import { api } from "../services/apiClient";
 import { withSSRAuth } from "../utils/withSSRAuth";
+import { AuthTokenError } from "../services/errors/AuthTokenError";
 
 export default function Dashboard() {
   const { user } = useContext(AuthContext);
@@ -22,7 +23,7 @@ export const getServerSideProps = withSSRAuth(async (ctx) => {
   const apiClient = setupAPIClient(ctx);
   const response = await apiClient.get('/me');
 
-  console.log(response);
+  console.log(response.data);
 
   return { 
     props: {}

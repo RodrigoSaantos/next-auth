@@ -1,6 +1,7 @@
 import axios, { AxiosError } from 'axios';
 import { parseCookies, setCookie } from 'nookies';
 import { signOut } from '../contexts/AuthContext';
+import { AuthTokenError } from './errors/AuthTokenError';
 
 interface AxiosErrorResponse {
   code?: string;
@@ -49,7 +50,7 @@ export function setupAPIClient(ctx = undefined) {
               path: '/',
             });
 
-            api.defaults.headers.common['Authorization'] = `Bearer ${token}`
+            api.defaults.headers['Authorization'] = `Bearer ${token}`
 
             failedRequestsQueue.forEach(request => request.resolve(token));
             failedRequestsQueue = [];
@@ -83,6 +84,8 @@ export function setupAPIClient(ctx = undefined) {
         // deslogar o usuário
         if (process.browser) {
           signOut();
+        } else {
+          return Promise.reject(new AuthTokenError());
         }
       }
     }

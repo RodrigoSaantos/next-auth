@@ -79,7 +79,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
       });
 
 
-      api.defaults.headers.common['Authorization'] = `Bearer ${token}`;
+      api.defaults.headers['Authorization'] = `Bearer ${token}`;
 
       Router.push('/dashboard')
     } catch (err) {
